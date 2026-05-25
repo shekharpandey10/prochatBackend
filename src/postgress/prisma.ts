@@ -1,16 +1,12 @@
-import { PrismaClient } from "@prisma/client/extension";
-const databaseUrl=process.env.DATABASE_URL
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client.js";
 
-if(!databaseUrl)  throw new Error("DATABASE_URL environment variable is missing");
+const databaseUrl = process.env.DATABASE_URL;
 
-const prisma = new PrismaClient(
-//     {
-//  datasources: {
-//     db: {
-//       url: databaseUrl,
-//     },
-//   }
-// }
-);
+if (!databaseUrl) throw new Error("DATABASE_URL environment variable is missing");
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: databaseUrl }),
+});
 
 export default prisma;
