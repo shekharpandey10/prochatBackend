@@ -6,7 +6,6 @@ import prisma from "../postgress/prisma.ts"
 import type { SignUpBody, TokanPayload } from "../types/auth.types.ts"
 import { success } from "zod";
 import { generateAccessToken, generateRefreshToken } from "../utils/genToken.ts";
-const jwtSecret = process.env.JWT_SECRET
 export const authController = {
    loginUser: asyncHandler(async (req: Request, res: Response) => {
       const { email, password } = req.body
@@ -35,7 +34,23 @@ export const authController = {
          generateRefreshToken(
             tokenPayload
          );
+      const expirationDate = new Date();
+      expirationDate.setDate(expirationDate.getDate() + 15);
 
+      await prisma.refreshToken.deleteMany({
+         where: {
+            userId: user.id,
+            expiresAt: { lt: new Date() }
+         }
+      });
+
+      await prisma.refreshToken.create(({
+         data: {
+            token: refreshToken,
+            userId: user.id,
+            expiresAt: expirationDate
+         }
+      }))
 
       res.cookie("refreshToken", refreshToken, {
          httpOnly: true, secure: process.env.NODE_ENV ===
@@ -79,5 +94,8 @@ export const authController = {
          success: true,
          message: "successfully logout."
       })
+   },
+   refresh: (req: Request, res: Response) => {
+
    }
 }

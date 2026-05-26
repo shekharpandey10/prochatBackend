@@ -34,7 +34,7 @@ export function generateRefreshToken(
     payload,
     process.env.REFRESH_TOKEN,
     {
-      expiresIn: "15m",
+      expiresIn: "15d",
     }
   );
 }
