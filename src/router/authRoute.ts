@@ -12,6 +12,6 @@ router.get('/', (req: Request, res: Response) => {
 router.post('/login', authController.loginUser)
 router.post('/signup', authController.signUpUser)
 router.put('/logout', authHandler, authController.logOut)
-router.put('/auth/refresh', authHandler, authController.refresh)
+router.put('/auth/refresh', authController.refresh)
 
 export default router

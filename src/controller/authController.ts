@@ -1,11 +1,9 @@
 import { type Request, type Response } from "express"
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { asyncHandler } from "../utils/asyncHandler.js"
 import prisma from "../postgress/prisma.ts"
 import type { SignUpBody, TokanPayload } from "../types/auth.types.ts"
-import { success } from "zod";
-import { generateAccessToken, generateRefreshToken } from "../utils/genToken.ts";
+import { generateAccessToken, generateRefreshToken, verifyToken } from "../utils/genToken.ts";
 export const authController = {
    loginUser: asyncHandler(async (req: Request, res: Response) => {
       const { email, password } = req.body
@@ -40,7 +38,6 @@ export const authController = {
       await prisma.refreshToken.deleteMany({
          where: {
             userId: user.id,
-            expiresAt: { lt: new Date() }
          }
       });
 
@@ -52,16 +49,23 @@ export const authController = {
          }
       }))
 
-      res.cookie("refreshToken", refreshToken, {
-         httpOnly: true, secure: process.env.NODE_ENV ===
-            "production", sameSite: 'strict', maxAge:
-            7 *
-            24 *
-            60 *
-            60 *
-            1000,
+      res.cookie("accessToken", accessToken, {
+         httpOnly: true,
+         secure: process.env.NODE_ENV === "production",
+         sameSite: "strict",
+         maxAge: 15 * 60 * 1000, // 15 minutes in milliseconds
+         path: "/",             // Sent automatically on every API request
+      });
 
-      })
+      // 2. Long-lived Refresh Token Cookie (15 Days)
+      res.cookie("refreshToken", refreshToken, {
+         httpOnly: true,
+         secure: process.env.NODE_ENV === "production",
+         sameSite: "strict",
+         maxAge: 15 * 24 * 60 * 60 * 1000, // 15 days in milliseconds
+         path: "/api/auth/refresh",       // Only sent to your refresh route!
+      });
+
       const { password: _, ...safeUser } = user
 
       return res.status(200).json({ success: true, data: safeUser, accessToken })
@@ -89,13 +93,87 @@ export const authController = {
       })
    }),
 
-   logOut: (req: Request, res: Response) => {
+   logOut: asyncHandler(async (req: Request, res: Response) => {
+
+      const userId = req.user?.userId;
+      if (!userId) {
+         res.status(401);
+         throw new Error("Unauthorized: Invalid user context");
+      }
+
+      const user = await prisma.user.findUnique({
+         where: {
+            id: userId
+         }
+      });
+
+      if (!user) {
+         res.status(401);
+         throw new Error("Unauthorized: Invalid user context");
+      }
+
+      await prisma.refreshToken.deleteMany({
+         where: {
+            userId: userId
+         }
+      });
+
+      res.clearCookie('accessToken', {
+         httpOnly: true,
+         secure: process.env.NODE_ENV === 'production',
+         sameSite: "strict",
+         path: '/'
+      })
+      res.clearCookie('refreshToken', {
+         httpOnly: true,
+         secure: process.env.NODE_ENV === 'production',
+         sameSite: "strict",
+         path: "/api/auth/refresh",
+      })
+
       res.status(200).json({
          success: true,
          message: "successfully logout."
       })
-   },
-   refresh: (req: Request, res: Response) => {
+   }),
+   refresh: asyncHandler(async (req: Request, res: Response) => {
+      const refreshToken = req.cookies?.refreshToken as string | undefined
 
-   }
+      if (!refreshToken) {
+         res.status(401)
+         throw new Error("Unauthorized: Missing refresh token")
+      }
+
+      const refreshSecret = process.env.REFRESH_TOKEN_SECRET
+      if (!refreshSecret) {
+         res.status(500)
+         throw new Error("Server Error: refresh token secret missing")
+      }
+
+      const decoded = verifyToken({ token: refreshToken, secret: refreshSecret })
+
+      if (!decoded || typeof decoded === "string" || !decoded.userId) {
+         res.status(401)
+         throw new Error("Unauthorized: Invalid refresh token")
+      }
+
+      const storedToken = await prisma.refreshToken.findUnique({
+         where: { token: refreshToken },
+      })
+
+      if (!storedToken || storedToken.isRevoked || storedToken.expiresAt < new Date()) {
+         res.status(401)
+         throw new Error("Unauthorized: Refresh token revoked or expired")
+      }
+
+      const accessToken = generateAccessToken({
+         email: decoded.email,
+         userId: decoded.userId,
+      })
+
+      return res.status(200).json({
+         success: true,
+         accessToken,
+      })
+   })
 }
