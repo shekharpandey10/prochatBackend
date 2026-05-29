@@ -49,13 +49,7 @@ export const authController = {
          }
       }))
 
-      res.cookie("accessToken", accessToken, {
-         httpOnly: true,
-         secure: process.env.NODE_ENV === "production",
-         sameSite: "strict",
-         maxAge: 15 * 60 * 1000, // 15 minutes in milliseconds
-         path: "/",             // Sent automatically on every API request
-      });
+
 
       // 2. Long-lived Refresh Token Cookie (15 Days)
       res.cookie("refreshToken", refreshToken, {
@@ -66,9 +60,9 @@ export const authController = {
          path: "/api/auth/refresh",       // Only sent to your refresh route!
       });
 
-      const { password: _, ...safeUser } = user
+      const { password: _, updatedAt: _updatedAt, ...safeUser } = user
 
-      return res.status(200).json({ success: true, data: safeUser, accessToken })
+      return res.status(200).json({ success: true, data: { ...safeUser, message: "Welcome again!" }, accessToken })
    }),
    signUpUser: asyncHandler(async (req: Request, res: Response) => {
       const { first_name, last_name, email, password }: SignUpBody = req.body
