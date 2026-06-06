@@ -2,15 +2,17 @@ import jwt from "jsonwebtoken";
 import type { Socket } from "socket.io";
 
 interface UserPayload {
-    id: string;
+    userId: string;
     email: string;
 }
 
-interface AuthenticatedSocket extends Socket {
-    user?: UserPayload;
+declare module "socket.io" {
+    interface Socket {
+        user?: UserPayload;
+    }
 }
 type NextFunction = (err?: Error) => void;
-const socketAuth = ((socket: AuthenticatedSocket, next: NextFunction) => {
+const socketAuth = ((socket: Socket, next: NextFunction) => {
 
     try {
 

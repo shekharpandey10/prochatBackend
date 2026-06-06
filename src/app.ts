@@ -9,6 +9,7 @@ import http from 'http'
 import { Server } from 'socket.io'
 import cors from 'cors'
 import socketAuth from './middleware/socketAuth.ts';
+import { initSocket } from './socket/index.ts';
 const app: Express = express()
 const server = http.createServer(app)
 const port = process.env.PORT || 3000
@@ -33,14 +34,9 @@ const io = new Server(server, {
   }
 })
 
-io.use(socketAuth)
+initSocket(io)
 
-io.on('connection', (socket) => {
-  console.log('socket connected ', socket.id),
-    socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.id}`);
-    })
-})
+
 
 server.listen(port, async () => {
 

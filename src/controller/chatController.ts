@@ -52,8 +52,6 @@ const chatController = {
         const userId = req.user?.userId;
         const { page, limit } = req.query;
 
-        const parsedPage = Math.max(1, parseInt(page as string) || 1);
-        const pageSize = Math.max(1, parseInt(limit as string) || 10);
 
         if (!userId) {
             return res.status(401).json({
@@ -63,19 +61,25 @@ const chatController = {
         }
 
 
-        const [users, totalCount] = await prisma.$transaction([
-            prisma.user.findMany({
-                skip: (parsedPage - 1) * pageSize,
-                take: pageSize,
-                orderBy: { createdAt: 'desc' },
-                select: {
-                    id: true,
-                    first_name: true,
-                    last_name: true,
+        const parsedPage = Number(page) || 1;
+        const pageSize = Number(limit) || 10;
+
+        const users = await prisma.user.findMany({
+            skip: (parsedPage - 1) * pageSize,
+            take: pageSize,
+            orderBy: { createdAt: 'desc' },
+            where: {
+                id: {
+                    not: userId
                 }
-            }),
-            prisma.user.count(),
-        ]);
+            },
+            select: { id: true, first_name: true, last_name: true, }
+        });
+
+        let totalCount = 0;
+        if (parsedPage === 1) {
+            totalCount = await prisma.user.count();
+        }
 
 
         return res.status(200).json({
@@ -151,11 +155,59 @@ const chatController = {
         return res.status(200).json({
             success: true,
             isNew: messages.length > 0 ? false : true,
-            data: messages
+            data: { chatUser, messages },
+
         })
 
 
 
+    }),
+    fetchConversationUserList: asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.userId as string | undefined;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized"
+            })
+        }
+
+        const userList = await prisma.messages.findMany({
+            where: {
+
+                OR: [
+                    { senderId: userId },
+                    { receiverId: userId }
+                ]
+
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            include: {
+                sender: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true
+                    },
+
+                },
+                receiver: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true
+                    }
+                },
+            }
+        })
+
+        return res.status(200).json({
+            status: true,
+            data: userList
+        })
     })
 }
 
